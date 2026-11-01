@@ -1,0 +1,162 @@
+blueprint:
+  name: Dreame X50 – Automatic Garage Door Control
+  description: >-
+    Steuert ein Garagentor für einen Dreame-Saugroboter über LDS-Erkennung,
+    Zwischenwäsche und einen Entfernungssensor zur Ladestation.
+    Öffnet vor der Abfahrt, schließt nach dem Entfernen von der Station,
+    öffnet bei der Rückkehr und schließt nach dem Andocken.
+  domain: automation
+  input:
+    vacuum_entity:
+      name: Dreame-Saugroboter
+      description: Die Vacuum-Entität des Roboters.
+      selector:
+        entity:
+          filter:
+            - domain: vacuum
+
+    garage_cover:
+      name: Garagentor
+      description: Die Cover-Entität des Garagentors.
+      selector:
+        entity:
+          filter:
+            - domain: cover
+
+    distance_sensor:
+      name: Entfernung zur Ladestation
+      description: Numerischer Sensor mit der Entfernung in Metern.
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+
+    departure_distance:
+      name: Entfernung zum Schließen bei Abfahrt
+      description: Tor schließen, sobald der Roboter weiter als dieser Wert entfernt ist.
+      default: 0.5
+      selector:
+        number:
+          min: 0.1
+          max: 5
+          step: 0.1
+          unit_of_measurement: m
+          mode: slider
+
+    return_distance:
+      name: Entfernung zum Öffnen bei Rückkehr
+      description: Tor öffnen, sobald der Roboter näher als dieser Wert kommt.
+      default: 3.0
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.1
+          unit_of_measurement: m
+          mode: slider
+
+variables:
+  vacuum_entity: !input vacuum_entity
+  garage_cover: !input garage_cover
+
+triggers:
+  - trigger: state
+    entity_id: !input vacuum_entity
+    attribute: lds_state
+    to: true
+    id: lds_start
+
+  - trigger: numeric_state
+    entity_id: !input distance_sensor
+    above: !input departure_distance
+    id: departure_distance_reached
+
+  - trigger: numeric_state
+    entity_id: !input distance_sensor
+    below: !input return_distance
+    id: return_distance_reached
+
+  - trigger: state
+    entity_id: !input vacuum_entity
+    attribute: washing
+    from: true
+    to: false
+    id: washing_finished
+
+  - trigger: state
+    entity_id: !input vacuum_entity
+    attribute: docked
+    to: true
+    id: docked
+
+actions:
+  - choose:
+      # Erste Abfahrt: LDS-Turm fährt hoch, Roboter steht noch an der Station.
+      - conditions:
+          - condition: trigger
+            id: lds_start
+          - condition: template
+            value_template: |
+              {{ state_attr(vacuum_entity, 'docked') == true
+                 and is_state(vacuum_entity, 'cleaning') }}
+        sequence:
+          - action: cover.open_cover
+            target:
+              entity_id: !input garage_cover
+
+      # Zwischenabfahrt: nach Ende der Mopwäsche öffnen, solange noch eine
+      # Reinigungsfahrt läuft und der Roboter an der Station steht.
+      - conditions:
+          - condition: trigger
+            id: washing_finished
+          - condition: template
+            value_template: |
+              {{ state_attr(vacuum_entity, 'docked') == true
+                 and state_attr(vacuum_entity, 'started') == true
+                 and state_attr(vacuum_entity, 'returning') != true }}
+        sequence:
+          - action: cover.open_cover
+            target:
+              entity_id: !input garage_cover
+
+      # Abfahrt: schließen erst nach Überschreiten der eingestellten Distanz.
+      # Während einer Rückkehr (z. B. zur Mopwäsche) nicht schließen.
+      - conditions:
+          - condition: trigger
+            id: departure_distance_reached
+          - condition: template
+            value_template: |
+              {{ state_attr(vacuum_entity, 'docked') == false
+                 and state_attr(vacuum_entity, 'returning') != true }}
+        sequence:
+          - action: cover.close_cover
+            target:
+              entity_id: !input garage_cover
+
+      # Rückkehr: öffnen beim Unterschreiten der eingestellten Distanz.
+      - conditions:
+          - condition: trigger
+            id: return_distance_reached
+          - condition: template
+            value_template: |
+              {{ state_attr(vacuum_entity, 'returning') == true
+                 and state_attr(vacuum_entity, 'docked') == false }}
+        sequence:
+          - action: cover.open_cover
+            target:
+              entity_id: !input garage_cover
+
+      # Nach dem Andocken schließen.
+      - conditions:
+          - condition: trigger
+            id: docked
+        sequence:
+          - condition: template
+            value_template: |
+              {{ state_attr(vacuum_entity, 'docked') == true }}
+          - action: cover.close_cover
+            target:
+              entity_id: !input garage_cover
+
+mode: parallel
+max: 10
