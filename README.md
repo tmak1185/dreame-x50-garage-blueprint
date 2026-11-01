@@ -1,5 +1,20 @@
 My DIY Dreame X50 Ultra Garage
+## Project photos
 
+### Garage closed
+![Garage closed](garage-closed.jpg.jpg)
+
+### Garage open
+![Garage open](garage-open.jpg.jpg)
+![Garage open 2](garage-open2.jpg.jpg)
+
+### Garage details
+![Front view](garage-frontal.jpg.HEIC)
+![Garage door mechanism](garage-doormechanism.jpg.HEIC)
+![Garage door mechanism open](garage-doormechanism-open.jpg.HEIC)
+![Garage from above](garage-fromabove.jpg.HEIC)
+![Garage door 1](garage-opendoor1.jpg.HEIC)
+![Garage door 2](garage-opendoor2.jpg.HEIC)
 Smart automatic garage door with Home Assistant
 
 A custom-built garage for the Dreame X50 Ultra Complete, featuring an automatically controlled roller door integrated into Home Assistant.
